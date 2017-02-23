@@ -32,6 +32,7 @@ class Twilio extends phplistPlugin implements EmailSender
     private $currentSubscriber = null;
     private $sendSuccess = 0;
     private $sendFail = 0;
+    private $logger;
     /*
      *  Inherited variables
      */
@@ -160,6 +161,10 @@ class Twilio extends phplistPlugin implements EmailSender
 
     public function sendFormats()
     {
+        global $plugins;
+
+        require_once $plugins['CommonPlugin']->coderoot . 'Autoloader.php';
+
         $this->logger = \phpList\plugin\Common\Logger::instance();
 
         return array('sms' => 'SMS');
