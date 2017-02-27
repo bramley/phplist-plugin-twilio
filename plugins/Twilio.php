@@ -91,11 +91,24 @@ class Twilio extends phplistPlugin implements EmailSender
         ),
     );
 
+    private function sendNonSms($mailer, $header, $body)
+    {
+        if (defined('TWILIO_DEV') && TWILIO_DEV) {
+            return $mailer->localSpoolSend($header, $body);
+        }
+
+        return $mailer->amazonSesSend($header, $body);
+    }
+
     private function transformPhoneNumber($number)
     {
         $cleaned = preg_replace('/[^\d]/', '', $number);
 
         if (!$cleaned) {
+            return false;
+        }
+
+        if ($number[0] == '!') {
             return false;
         }
 
@@ -128,6 +141,19 @@ class Twilio extends phplistPlugin implements EmailSender
         }
         $mid = $messageData['id'];
         $this->campaigns[$mid] = $campaign;
+    }
+
+    private function updatePhoneAttribute($email, $phone, $phoneAttr)
+    {
+        global $tables;
+
+        $sql = <<<END
+    UPDATE {$tables['user_attribute']} ua
+    JOIN  {$tables['user']} u ON u.id = ua.userid
+    SET ua.value = '$phone'
+    WHERE u.email = '$email' AND ua.attributeid = $phoneAttr
+END;
+        Sql_Query($sql);
     }
 
     public function __construct()
@@ -307,13 +333,13 @@ END;
         static $client = null;
 
         if (!preg_match('/X-MessageID: (\d+)/', $header, $matches)) {
-            return $mailer->amazonSesSend($header, $body);
+            return $this->sendNonSms($mailer, $header, $body);
         }
         $mid = $matches[1];
         $campaign = $this->campaigns[$mid];
 
         if (!$campaign['isSMS']) {
-            return $mailer->amazonSesSend($header, $body);
+            return $this->sendNonSms($mailer, $header, $body);
         }
         preg_match('/X-ListMember: (.+)/', $header, $matches);
         $email = $matches[1];
@@ -324,7 +350,14 @@ END;
             $this->logger->debug('Twilio did not find subscriber');
             $attrValues = getUserAttributeValues($email, 0, true);
             $phoneAttr = getConfig('twilio_phone_attribute');
-            $phone = $this->transformPhoneNumber($attrValues['attribute' . $phoneAttr]);
+            $attrValue = $attrValues['attribute' . $phoneAttr];
+            $phone = $this->transformPhoneNumber($attrValue);
+
+            if (!$phone) {
+                logEvent(sprintf('Twilio - problem with To number: %s', $attrValue));
+
+                return false;
+            }
         }
 
         try {
@@ -342,7 +375,12 @@ END;
                 ]
             );
         } catch (\Exception $e) {
-            logEvent('Twilio exception: ' . $e->getMessage());
+            $code = $e->getCode();
+
+            if (!in_array($code, ['21212', '21606', '21611'])) {
+                $this->updatePhoneAttribute($email, '!' . $phone, $phoneAttr);
+            }
+            logEvent(sprintf('Twilio - exception: %s %s', $code, $e->getMessage()));
             ++$this->sendFail;
 
             return false;
