@@ -1,3 +1,7 @@
+version 1.1.0+20220912
+      Use the Amazon SES plugin to send all non-SMS emails
+      Update cs config
+
 version 1.0.3+20170228
       Reposition SMS tab
       Validate that footer and template not entered
