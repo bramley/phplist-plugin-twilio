@@ -33,6 +33,7 @@ class Twilio extends phplistPlugin implements EmailSender
     private $sendSuccess = 0;
     private $sendFail = 0;
     private $logger;
+    private $amazonSesPlugin;
     /*
      *  Inherited variables
      */
@@ -95,7 +96,7 @@ class Twilio extends phplistPlugin implements EmailSender
     {
         return defined('TWILIO_DEV') && TWILIO_DEV
             ? $mailer->localSpoolSend($header, $body)
-            : $mailer->amazonSesSend($header, $body);
+            : $this->amazonSesPlugin->send($mailer, $header, $body);
     }
 
     private function transformPhoneNumber($number)
@@ -213,6 +214,18 @@ END;
             : '2017-02-21';
     }
 
+    public function activate()
+    {
+        global $allplugins;
+
+        $this->amazonSesPlugin = $allplugins['AmazonSes'];
+        $this->settings += $this->amazonSesPlugin->settings;
+
+        require_once $this->amazonSesPlugin->coderoot . '/MailClient.php';
+
+        parent::activate();
+    }
+
     /**
      * Provide the dependencies for enabling this plugin.
      *
@@ -220,11 +233,13 @@ END;
      */
     public function dependencyCheck()
     {
+        global $allplugins, $plugins;
+
         return [
-            'PHP version 5.4.0 or greater' => version_compare(PHP_VERSION, '5.4') > 0,
             'curl extension installed' => extension_loaded('curl'),
             'Common Plugin installed' => phpListPlugin::isEnabled('CommonPlugin'),
             'phpList 3.3.0 or greater' => version_compare(VERSION, '3.3') > 0,
+            'Amazon SES plugin installed but not enabled' => isset($allplugins['AmazonSes']) && !isset($plugins['AmazonSes']),
         ];
     }
 
@@ -471,6 +486,8 @@ END;
      */
     public function processSendStats($sent = 0, $invalid = 0, $failed_sent = 0, $unconfirmed = 0, $counters = array())
     {
+        $this->amazonSesPlugin->processSendStats($sent, $invalid, $failed_sent, $unconfirmed, $counters);
+
         if ($this->sendSuccess > 0 || $this->sendFail > 0) {
             $this->shutdown();
         }
