@@ -443,7 +443,7 @@ END;
             $body = trim(substr($body, 0, $pos));
         }
         $parameters = [
-            'from' => $campaign['smsFrom'],
+            'from' => $campaign['smsFrom'] ?? getConfig('twilio_default_from'),
             'body' => $body,
         ];
         $this->logger->debug($parameters['from']);
