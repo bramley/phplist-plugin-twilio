@@ -19,6 +19,8 @@
  * @copyright 2017 Duncan Cameron
  * @license   http://www.gnu.org/licenses/gpl.html GNU General Public License, Version 3
  */
+use phpList\plugin\Common\Logger;
+use phpList\plugin\Twilio\DAO;
 
 /**
  * Registers the plugin with phplist.
@@ -34,6 +36,7 @@ class Twilio extends phplistPlugin implements EmailSender
     private $sendFail = 0;
     private $logger;
     private $amazonSesPlugin;
+    private $dao;
     /*
      *  Inherited variables
      */
@@ -154,25 +157,14 @@ END;
         Sql_Query($sql);
     }
 
-    private function attachments($mailer)
+    private function attachments($mid, $uid)
     {
-        global $public_scheme, $website, $pageroot, $tables;
+        global $public_scheme, $website, $pageroot;
 
-        $attachments = $mailer->getAttachments();
         $mediaUrls = [];
 
-        foreach ($attachments as $attachment) {
-            list($content, $filename, $name, $encoding, $type, $isString, $disposition, $cid) = $attachment;
-            $name = sql_escape($name);
-            $sql =
-                "SELECT id, filename, remotefile, mimetype, description, size
-                FROM {$tables['attachment']}
-                WHERE remotefile = '$name'";
-            $row = Sql_Fetch_Assoc_Query($sql);
-
-            if ($row) {
-                $mediaUrls[] = sprintf('%s://%s%s/dl.php?id=%d', $public_scheme, $website, $pageroot, $row['id']);
-            }
+        foreach ($this->dao->messageAttachments($mid) as $row) {
+            $mediaUrls[] = sprintf('%s://%s%s/dl.php?id=%d&uid=%s', $public_scheme, $website, $pageroot, $row['id'], $uid);
         }
 
         return $mediaUrls;
@@ -180,21 +172,14 @@ END;
 
     private function showAttachments($messageid)
     {
-        global $tables;
-
-        $sql =
-            "SELECT a.id, filename, remotefile, mimetype, description, size
-            FROM {$tables['attachment']} a
-            JOIN {$tables['message_attachment']} ma ON a.id = ma.attachmentid
-            WHERE ma.messageid = $messageid";
         $attachSize = 0;
         $attachText = '';
-        $result = Sql_query($sql);
+        $attachments = $this->dao->messageAttachments($messageid);
 
-        if (Sql_Num_Rows($result)) {
+        if (count($attachments) > 0) {
             $attachText .= '<label>Attachments</label>';
 
-            while ($row = Sql_fetch_array($result)) {
+            foreach ($attachments as $row) {
                 $remotefile = htmlspecialchars($row['remotefile']);
                 $size = $row['size'];
                 $attachSize += $size;
@@ -224,6 +209,8 @@ END;
         require_once $this->amazonSesPlugin->coderoot . '/MailClient.php';
 
         parent::activate();
+        $this->dao = new DAO();
+        $this->logger = Logger::instance();
     }
 
     /**
@@ -237,7 +224,10 @@ END;
 
         return [
             'curl extension installed' => extension_loaded('curl'),
-            'Common Plugin installed' => phpListPlugin::isEnabled('CommonPlugin'),
+            'Common Plugin v3.22.1 or later installed' => (
+            phpListPlugin::isEnabled('CommonPlugin')
+                && version_compare($plugins['CommonPlugin']->version, '3.22.1') >= 0
+            ),
             'phpList 3.3.0 or greater' => version_compare(VERSION, '3.3') > 0,
             'Amazon SES plugin installed but not enabled' => isset($allplugins['AmazonSes']) && !isset($plugins['AmazonSes']),
         ];
@@ -250,19 +240,11 @@ END;
 
     public function sendFormats()
     {
-        global $plugins;
-
-        require_once $plugins['CommonPlugin']->coderoot . 'Autoloader.php';
-
-        $this->logger = \phpList\plugin\Common\Logger::instance();
-
         return array('sms' => 'SMS');
     }
 
     public function sendMessageTab($messageid = 0, $data = array())
     {
-        global $tables;
-
         if (!$this->isSMSCampaign($data)) {
             return '';
         }
@@ -372,14 +354,13 @@ END;
         if (!$this->isSMSCampaign($messagedata)) {
             return true;
         }
-        $attrValues = getUserAttributeValues($subscriberdata['email'], 0, true);
-        $prefer = getConfig('twilio_prefer_attribute');
+        $prefer = UserAttributeValue($subscriberdata['id'], getConfig('twilio_prefer_attribute'));
 
-        if (!(isset($attrValues['attribute' . $prefer]) && $attrValues['attribute' . $prefer])) {
+        if (!$prefer) {
             return false;
         }
-        $phoneAttr = getConfig('twilio_phone_attribute');
-        $phone = $this->transformPhoneNumber($attrValues['attribute' . $phoneAttr]);
+        $phoneAttrValue = UserAttributeValue($subscriberdata['id'], getConfig('twilio_phone_attribute'));
+        $phone = $this->transformPhoneNumber($phoneAttrValue);
 
         if (!$phone) {
             return false;
@@ -387,6 +368,7 @@ END;
         $this->currentSubscriber = [
             'phone' => $phone,
             'email' => $subscriberdata['email'],
+            'uid' => $subscriberdata['uniqid'],
         ];
 
         return true;
@@ -421,16 +403,18 @@ END;
         $email = $matches[1];
 
         if ($this->currentSubscriber && $email == $this->currentSubscriber['email']) {
+            $uid = $this->currentSubscriber['uid'];
             $phone = $this->currentSubscriber['phone'];
         } else {
+            // this path is for when a test email is sent
             $this->logger->debug('Twilio did not find subscriber');
-            $attrValues = getUserAttributeValues($email, 0, true);
-            $phoneAttr = getConfig('twilio_phone_attribute');
-            $attrValue = $attrValues['attribute' . $phoneAttr];
-            $phone = $this->transformPhoneNumber($attrValue);
+            $user = $this->dao->userByEmail($email);
+            $uid = $user['uniqid'];
+            $phoneAttrValue = UserAttributeValue($user['id'], getConfig('twilio_phone_attribute'));
+            $phone = $this->transformPhoneNumber($phoneAttrValue);
 
             if (!$phone) {
-                logEvent(sprintf('Twilio - Not sending to: %s', $attrValue));
+                logEvent(sprintf('Twilio - Not sending to: %s', $phoneAttrValue));
 
                 return false;
             }
@@ -449,7 +433,7 @@ END;
         $this->logger->debug($parameters['from']);
         $this->logger->debug($parameters['body']);
 
-        if ($mediaUrls = $this->attachments($mailer)) {
+        if ($mediaUrls = $this->attachments($mid, $uid)) {
             $parameters['mediaUrl'] = $mediaUrls;
             $this->logger->debug(implode(', ', $mediaUrls));
         }
@@ -466,7 +450,7 @@ END;
             $code = $e->getCode();
 
             if (!in_array($code, ['21212', '21606', '21611', '21620', '21621'])) {
-                $this->updatePhoneAttribute($email, '!' . $phone, $phoneAttr);
+                $this->dao->updateUserAttribute($email, getConfig('twilio_phone_attribute'), '!' . $phone);
             }
             logEvent(sprintf('Twilio - exception: %s %s', $code, $e->getMessage()));
             ++$this->sendFail;

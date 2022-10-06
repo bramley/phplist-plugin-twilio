@@ -1,3 +1,9 @@
+version 1.2.0+20221006
+      Use default value for SMS From number
+      Identify attachments from the message_attachment table instead of those attached to the phpmailer instance.
+      Use the user and message traits to access those tables.
+      Remove code now redundant.
+
 version 1.1.0+20220912
       Use the Amazon SES plugin to send all non-SMS emails
       Update cs config
