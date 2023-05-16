@@ -212,8 +212,8 @@ class Twilio extends phplistPlugin implements EmailSender
         return [
             'curl extension installed' => extension_loaded('curl'),
             'Common Plugin v3.22.1 or later installed' => (
-            phpListPlugin::isEnabled('CommonPlugin')
-                && version_compare($plugins['CommonPlugin']->version, '3.22.1') >= 0
+                phpListPlugin::isEnabled('CommonPlugin')
+                    && version_compare($plugins['CommonPlugin']->version, '3.22.1') >= 0
             ),
             'phpList 3.3.0 or greater' => version_compare(VERSION, '3.3') > 0,
             'Amazon SES plugin installed but not enabled' => isset($allplugins['AmazonSes']) && !isset($plugins['AmazonSes']),

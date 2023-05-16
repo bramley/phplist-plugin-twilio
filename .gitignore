@@ -1,4 +1,4 @@
-.php_cs.cache
-README.html
+*.cache
+*.html
 
 plugins/Twilio/Twilio/Tests

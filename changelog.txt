@@ -1,3 +1,7 @@
+version 1.2.1+20230516
+      Add Twilio exception code that does not mark the phone number as unsubscribed
+      Update cs fixer
+
 version 1.2.0+20221006
       Use default value for SMS From number
       Identify attachments from the message_attachment table instead of those attached to the phpmailer instance.
