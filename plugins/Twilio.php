@@ -436,7 +436,7 @@ END;
         } catch (\Exception $e) {
             $code = $e->getCode();
 
-            if (!in_array($code, ['21212', '21606', '21611', '21620', '21621'])) {
+            if (!in_array($code, ['21212', '21606', '21611', '21617', '21620', '21621'])) {
                 $this->dao->updateUserAttribute($email, getConfig('twilio_phone_attribute'), '!' . $phone);
             }
             logEvent(sprintf('Twilio - exception: %s %s', $code, $e->getMessage()));
