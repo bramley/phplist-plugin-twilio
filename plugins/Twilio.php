@@ -303,6 +303,27 @@ END;
     }
 
     /**
+     * Provide a read-only view of the SMS fields.
+     *
+     * @param int   $messageId   message id
+     * @param array $messageData message fields
+     */
+    public function viewMessage($messageId, array $messageData)
+    {
+        if (!$this->isSMSCampaign($messageData)) {
+            return false;
+        }
+        $tabHtml = $this->sendMessageTab($messageId, $messageData);
+        $html = <<<END
+    <fieldset disabled>
+    $tabHtml
+    </fieldset>
+END;
+
+        return ['SMS', $html];
+    }
+
+    /**
      * Use this hook to store the SMS fields of the campaign.
      *
      * @param array $messageData message fields
