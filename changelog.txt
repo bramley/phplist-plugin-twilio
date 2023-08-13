@@ -1,3 +1,6 @@
+version 1.2.3+20230813
+      Use publicBaseUrl() function
+
 version 1.2.2+20230517
       Display the SMS fields when viewing a campaign
 

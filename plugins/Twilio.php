@@ -22,6 +22,8 @@
 use phpList\plugin\Common\Logger;
 use phpList\plugin\Twilio\DAO;
 
+use function phpList\plugin\Common\publicBaseUrl;
+
 /**
  * Registers the plugin with phplist.
  */
@@ -146,12 +148,10 @@ class Twilio extends phplistPlugin implements EmailSender
 
     private function attachments($mid, $uid)
     {
-        global $public_scheme, $website, $pageroot;
-
         $mediaUrls = [];
 
         foreach ($this->dao->messageAttachments($mid) as $row) {
-            $mediaUrls[] = sprintf('%s://%s%s/dl.php?id=%d&uid=%s', $public_scheme, $website, $pageroot, $row['id'], $uid);
+            $mediaUrls[] = sprintf('%s/dl.php?id=%d&uid=%s', publicBaseUrl(), $row['id'], $uid);
         }
 
         return $mediaUrls;
@@ -211,9 +211,9 @@ class Twilio extends phplistPlugin implements EmailSender
 
         return [
             'curl extension installed' => extension_loaded('curl'),
-            'Common Plugin v3.22.1 or later installed' => (
+            'Common Plugin v3.29.0 or later installed' => (
                 phpListPlugin::isEnabled('CommonPlugin')
-                    && version_compare($plugins['CommonPlugin']->version, '3.22.1') >= 0
+                    && version_compare($plugins['CommonPlugin']->version, '3.29.0') >= 0
             ),
             'phpList 3.3.0 or greater' => version_compare(VERSION, '3.3') > 0,
             'Amazon SES plugin installed but not enabled' => isset($allplugins['AmazonSes']) && !isset($plugins['AmazonSes']),
@@ -438,8 +438,7 @@ END;
             'from' => $campaign['smsFrom'] ?? getConfig('twilio_default_from'),
             'body' => $body,
         ];
-        $this->logger->debug($parameters['from']);
-        $this->logger->debug($parameters['body']);
+        $this->logger->debug('Parameters', $parameters);
 
         if ($mediaUrls = $this->attachments($mid, $uid)) {
             $parameters['mediaUrl'] = $mediaUrls;
@@ -466,7 +465,7 @@ END;
             return false;
         }
         ++$this->sendSuccess;
-        $this->logger->debug('Twilio return code: ' . $message->sid);
+        $this->logger->debug('Response', [$message]);
 
         return true;
     }
