@@ -22,7 +22,7 @@
 use phpList\plugin\Common\Logger;
 use phpList\plugin\Twilio\DAO;
 
-use function phpList\plugin\Common\publicBaseUrl;
+use function phpList\plugin\Common\publicUrl;
 
 /**
  * Registers the plugin with phplist.
@@ -151,7 +151,7 @@ class Twilio extends phplistPlugin implements EmailSender
         $mediaUrls = [];
 
         foreach ($this->dao->messageAttachments($mid) as $row) {
-            $mediaUrls[] = sprintf('%s/dl.php?id=%d&uid=%s', publicBaseUrl(), $row['id'], $uid);
+            $mediaUrls[] = publicUrl('dl.php', ['id' => $row['id'], 'uid' => $uid]);
         }
 
         return $mediaUrls;
@@ -442,7 +442,7 @@ END;
 
         if ($mediaUrls = $this->attachments($mid, $uid)) {
             $parameters['mediaUrl'] = $mediaUrls;
-            $this->logger->debug(implode(', ', $mediaUrls));
+            $this->logger->debug('Attachments', $mediaUrls);
         }
 
         try {
