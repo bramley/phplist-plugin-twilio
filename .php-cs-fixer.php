@@ -22,6 +22,9 @@ return $config->setRules([
         ],
         'blank_line_after_namespace' => true,
         'visibility_required' => false,
+        'fully_qualified_strict_types' => false,
+        'blank_line_after_opening_tag' => false,
+        'no_null_property_initialization' => false,
     ])
     ->setFinder($finder)
 ;
