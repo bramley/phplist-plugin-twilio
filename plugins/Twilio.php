@@ -434,6 +434,14 @@ END;
         if (false !== ($pos = strpos($body, $credits))) {
             $body = trim(substr($body, 0, $pos));
         }
+
+        if (strlen($body) > 1600) {
+            // body too long, suspend the campaign
+            $this->dao->suspendMessage($mid);
+            logEvent(sprintf('Twilio - message too long, %s, campaign %s suspended', strlen($body), $mid));
+
+            return false;
+        }
         $parameters = [
             'from' => $campaign['smsFrom'] ?? getConfig('twilio_default_from'),
             'body' => $body,
@@ -458,6 +466,10 @@ END;
 
             if (!in_array($code, ['21212', '21606', '21611', '21617', '21620', '21621'])) {
                 $this->dao->updateUserAttribute($email, getConfig('twilio_phone_attribute'), '!' . $phone);
+            } else {
+                // too long or problem with the From number
+                $this->dao->suspendMessage($mid);
+                logEvent(sprintf('Twilio - campaign %s suspended', $mid));
             }
             logEvent(sprintf('Twilio - exception: %s %s', $code, $e->getMessage()));
             ++$this->sendFail;
